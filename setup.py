@@ -21,7 +21,6 @@ name='mlproject',
 version='0.0.1',
 author='varshini',
 author_email='sathiyavarshiniofficial@gmail.com',
-packages=find_packages(),
+packages=find_packages(where="src"),
 install_requires=get_requirements('requirements.txt')
-
 )
