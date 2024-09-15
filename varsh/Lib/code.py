@@ -40,7 +40,7 @@ class InteractiveInterpreter:
 
         Arguments are as for compile_command().
 
-        One several things can happen:
+        One of several things can happen:
 
         1) The input is incorrect; compile_command() raised an
         exception (SyntaxError or OverflowError).  A syntax traceback
@@ -106,6 +106,7 @@ class InteractiveInterpreter:
 
         """
         type, value, tb = sys.exc_info()
+        sys.last_exc = value
         sys.last_type = type
         sys.last_value = value
         sys.last_traceback = tb
@@ -119,14 +120,14 @@ class InteractiveInterpreter:
             else:
                 # Stuff in the right filename
                 value = SyntaxError(msg, (filename, lineno, offset, line))
-                sys.last_value = value
+                sys.last_exc = sys.last_value = value
         if sys.excepthook is sys.__excepthook__:
             lines = traceback.format_exception_only(type, value)
             self.write(''.join(lines))
         else:
             # If someone has set sys.excepthook, we let that take precedence
             # over self.write
-            sys.excepthook(type, value, tb)
+            self._call_excepthook(type, value, tb)
 
     def showtraceback(self):
         """Display the exception that just occurred.
@@ -138,16 +139,30 @@ class InteractiveInterpreter:
         """
         sys.last_type, sys.last_value, last_tb = ei = sys.exc_info()
         sys.last_traceback = last_tb
+        sys.last_exc = ei[1]
         try:
-            lines = traceback.format_exception(ei[0], ei[1], last_tb.tb_next)
             if sys.excepthook is sys.__excepthook__:
+                lines = traceback.format_exception(ei[0], ei[1], last_tb.tb_next)
                 self.write(''.join(lines))
             else:
                 # If someone has set sys.excepthook, we let that take precedence
                 # over self.write
-                sys.excepthook(ei[0], ei[1], last_tb)
+                self._call_excepthook(ei[0], ei[1], last_tb)
         finally:
             last_tb = ei = None
+
+    def _call_excepthook(self, typ, value, tb):
+        try:
+            sys.excepthook(typ, value, tb)
+        except SystemExit:
+            raise
+        except BaseException as e:
+            e.__context__ = None
+            print('Error in sys.excepthook:', file=sys.stderr)
+            sys.__excepthook__(type(e), e, e.__traceback__.tb_next)
+            print(file=sys.stderr)
+            print('Original exception was:', file=sys.stderr)
+            sys.__excepthook__(typ, value, tb)
 
     def write(self, data):
         """Write a string.
